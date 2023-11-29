@@ -5,7 +5,6 @@ import os
 import numpy as np
 from datetime import datetime
 import mysql.connector
-import face_recognition
 import imutils
 import pytesseract
 from PIL import Image
