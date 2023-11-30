@@ -1,7 +1,9 @@
 from time import sleep
+
 import cv2
 import os
 import numpy as np
+from datetime import datetime
 import mysql.connector
 import imutils
 import pytesseract
@@ -22,31 +24,29 @@ def readEngines():
 
 
 def analyse(img):
-    # The following two lines are for tests in local
-    # img = cv2.imread('test.jpg', cv2.IMREAD_COLOR)
+    # img = cv2.imread('4.jpg', cv2.IMREAD_COLOR)
+
     # img = cv2.resize(img, (620, 480))
 
-    # Convert to grey scale, then blur to remove noise (usless informations)
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    gray = cv2.bilateralFilter(gray, 11, 17, 17)
-    # Edge detection
-    edged = cv2.Canny(gray, 30, 200)
+    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)  # convert to grey scale
+    gray = cv2.bilateralFilter(gray, 11, 17, 17)  # Blur to reduce noise
+    edged = cv2.Canny(gray, 30, 200)  # Perform Edge detection
 
-    # Find the contours in the edged image, keep only the largest ones
-    # And initialize the screen contour
+    # find contours in the edged image, keep only the largest
+    # ones, and initialize our screen contour
     cnts = cv2.findContours(edged.copy(), cv2.RETR_TREE, cv2.CHAIN_APPROX_SIMPLE)
     cnts = imutils.grab_contours(cnts)
     cnts = sorted(cnts, key=cv2.contourArea, reverse=True)[:10]
     screenCnt = None
 
-    # Loop through the contours
+    # loop over our contours
     for c in cnts:
-        # Countour approximation
+        # approximate the contour:
         peri = cv2.arcLength(c, True)
         approx = cv2.approxPolyDP(c, 0.018 * peri, True)
 
-        # If the approximated contour has four points, then
-        # Assume that a screen is found
+        # if our approximated contour has four points, then
+        # we can assume that we have found our screen
         if len(approx) == 4:
             screenCnt = approx
             break
@@ -72,14 +72,13 @@ def analyse(img):
     (bottomx, bottomy) = (np.max(x), np.max(y))
     Cropped = gray[topx:bottomx + 1, topy:bottomy + 1]
 
-    # Read the plate number
+    # Read the number plate
     text = pytesseract.image_to_string(Cropped, config='--psm 11')
     for engin in lsEngin:
         if engin["numeroSerie"] == text:
             insertImageIntoDatabase(engin["id"])
     print("Detected Number is:", text)
 
-    # For tests in local
     # cv2.imshow('image', img)
     # cv2.imshow('Cropped', Cropped)
 
@@ -87,47 +86,51 @@ def analyse(img):
     # cv2.destroyAllWindows()
 
 
-# Register the video flux as images
+# Enregistrement du flux de vidéo comme images
 def main():
     lsEngin = getStealEngines()
     thEngine = Thread(target=readEngines)
     thEngine.start()
-    # Connect to the Rasberry-Pi webcam
-    cap = cv2.VideoCapture("http://192.168.1.60:8081")
-    # Connect to default webcam
-    # cap.open(0)
+    # Ouvrir la connexion à la caméra. 0 correspond à la caméra par défaut.
+    cap = cv2.VideoCapture(0)
+    # cap.open("http://192.168.1.60:8088")
+    # cv2.VideoCapture("http://192.168.1.60:8081")
 
-    # Check if the webcam is successfully opened
+    # Vérifier si la caméra est ouverte correctement
     if not cap.isOpened():
         print("Erreur: Impossible d'ouvrir la caméra.")
         exit()
 
-    # Create a directory to save the images
+    # Créer un répertoire pour enregistrer les images
     output_directory = "images"
     os.makedirs(output_directory, exist_ok=True)
 
-    # Counter (images)
-    count = 0
+    count = 0  # Compteur pour numéroter les images
 
     while True:
-        # Read image per image
+        # Capture image par image
         ret, img = cap.read()
 
         if not ret:
             print("Erreur: Impossible de lire la trame.")
             break
 
-        # Stream the image
+        # Afficher l'image en direct
         cv2.imshow('frame', img)
         th = Thread(target=analyse, args=[img])
         th.start()
-        # Display and wait for an input from std
+        # Enregistrement de l'image dans le répertoire de sortie
+        # image_path = os.path.join(output_directory, f'image_{count}.jpg')
+        # cv2.imwrite(image_path, img)
+        # count += 1  # Incrémenter le compteur
+        # Affichage et saisie d'un code clavier
         if cv2.waitKey(1) & 0xFF == ord('q'):
             break
 
-    # Close the OpenCV window
+    # Fermer la fenêtre OpenCV
     cap.release()
     cv2.destroyAllWindows()
+
 
 if __name__ == '__main__':
     main()
